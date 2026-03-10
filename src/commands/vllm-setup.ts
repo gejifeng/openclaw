@@ -10,6 +10,7 @@ import { isNonSecretApiKeyMarker } from "../agents/model-auth-markers.js";
 import { buildVllmProvider } from "../agents/models-config.providers.discovery.js";
 import type { OpenClawConfig } from "../config/config.js";
 import type { ModelDefinitionConfig } from "../config/types.models.js";
+import { normalizeOptionalSecretInput } from "../utils/normalize-secret-input.js";
 import type { WizardPrompter } from "../wizard/prompts.js";
 import {
   applyProviderDefaultModel,
@@ -71,8 +72,14 @@ function createManualModelDefinition(id: string): ModelDefinitionConfig {
 
 function resolveConfiguredScanApiKey(apiKey?: string): string | undefined {
   const trimmed = apiKey?.trim();
-  if (!trimmed || isNonSecretApiKeyMarker(trimmed)) {
+  if (!trimmed) {
     return undefined;
+  }
+  if (isNonSecretApiKeyMarker(trimmed, { includeEnvVarName: false })) {
+    return undefined;
+  }
+  if (isNonSecretApiKeyMarker(trimmed)) {
+    return normalizeOptionalSecretInput(process.env[trimmed]);
   }
   return trimmed;
 }
