@@ -33,7 +33,11 @@ const VLLM_ENDPOINT_USE_MODEL = "__endpoint_use_model__";
 const VLLM_ENDPOINT_UPDATE = "__endpoint_update__";
 const VLLM_ENDPOINT_DELETE = "__endpoint_delete__";
 
-type VllmSetupResult = { config: OpenClawConfig; modelId: string; modelRef: string };
+type VllmSetupResult = {
+  config: OpenClawConfig;
+  modelId?: string;
+  modelRef?: string;
+};
 
 type ManagedVllmProvider = {
   providerKey: string;
@@ -479,7 +483,7 @@ export async function promptAndConfigureVllm(params: {
   cfg: OpenClawConfig;
   prompter: WizardPrompter;
   agentDir?: string;
-}): Promise<VllmSetupResult | null> {
+}): Promise<VllmSetupResult> {
   let nextConfig = params.cfg;
 
   while (true) {
@@ -525,7 +529,7 @@ export async function promptAndConfigureVllm(params: {
     });
 
     if (action === VLLM_ACTION_DONE) {
-      return null;
+      return { config: nextConfig };
     }
 
     if (action === VLLM_ACTION_USE_EXISTING) {
