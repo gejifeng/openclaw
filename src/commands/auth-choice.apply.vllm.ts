@@ -1,8 +1,10 @@
+import type { OpenClawConfig } from "../config/config.js";
 import { normalizeAgentId } from "../routing/session-key.js";
 import type { ApplyAuthChoiceParams, ApplyAuthChoiceResult } from "./auth-choice.apply.js";
 import {
   applyVllmDefaultModel,
   clearStaleVllmDefaultModel,
+  clearStaleVllmModelConfig,
   isStaleManagedVllmModelRef,
 } from "./vllm-default-model.js";
 import { promptAndConfigureVllm } from "./vllm-setup.js";
@@ -27,6 +29,52 @@ function resolveCurrentAgentModelRef(params: ApplyAuthChoiceParams): string | un
   return entry.model.primary?.trim() || undefined;
 }
 
+function pruneCurrentAgentModelOverride(params: {
+  config: OpenClawConfig;
+  agentId?: string;
+}): OpenClawConfig {
+  const agentId = params.agentId ? normalizeAgentId(params.agentId) : undefined;
+  if (!agentId) {
+    return params.config;
+  }
+
+  const list = params.config.agents?.list;
+  if (!list || list.length === 0) {
+    return params.config;
+  }
+
+  const index = list.findIndex(
+    (candidate: NonNullable<NonNullable<OpenClawConfig["agents"]>["list"]>[number]) =>
+      normalizeAgentId(candidate.id) === agentId,
+  );
+  if (index < 0) {
+    return params.config;
+  }
+
+  const entry = list[index];
+  const nextModel = clearStaleVllmModelConfig(params.config, entry.model);
+  if (nextModel === entry.model) {
+    return params.config;
+  }
+
+  const nextList = [...list];
+  const nextEntry = { ...entry };
+  if (nextModel) {
+    nextEntry.model = nextModel;
+  } else {
+    delete nextEntry.model;
+  }
+  nextList[index] = nextEntry;
+
+  return {
+    ...params.config,
+    agents: {
+      ...params.config.agents,
+      list: nextList,
+    },
+  };
+}
+
 export async function applyAuthChoiceVllm(
   params: ApplyAuthChoiceParams,
 ): Promise<ApplyAuthChoiceResult | null> {
@@ -41,12 +89,16 @@ export async function applyAuthChoiceVllm(
   });
 
   if (!vllmSelection.modelRef) {
+    const nextConfig = pruneCurrentAgentModelOverride({
+      config: clearStaleVllmDefaultModel(vllmSelection.config),
+      agentId: params.agentId,
+    });
     const shouldClearAgentModelOverride = isStaleManagedVllmModelRef(
-      vllmSelection.config,
+      nextConfig,
       resolveCurrentAgentModelRef(params),
     );
     return {
-      config: clearStaleVllmDefaultModel(vllmSelection.config),
+      config: nextConfig,
       ...(shouldClearAgentModelOverride ? { clearAgentModelOverride: true } : {}),
     };
   }

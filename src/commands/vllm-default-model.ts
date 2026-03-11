@@ -1,6 +1,7 @@
 import { DEFAULT_PROVIDER } from "../agents/defaults.js";
 import { parseModelRef } from "../agents/model-selection.js";
 import type { OpenClawConfig } from "../config/config.js";
+import type { AgentModelConfig } from "../config/types.agents-shared.js";
 
 export function applyVllmDefaultModel(cfg: OpenClawConfig, modelRef: string): OpenClawConfig {
   const existingModel = cfg.agents?.defaults?.model;
@@ -51,68 +52,75 @@ function isAvailableModelRef(cfg: OpenClawConfig, modelRef: string): boolean {
   );
 }
 
+export function clearStaleVllmModelConfig(
+  cfg: OpenClawConfig,
+  modelConfig: AgentModelConfig | undefined,
+): AgentModelConfig | undefined {
+  if (!modelConfig) {
+    return undefined;
+  }
+
+  const primaryRaw =
+    typeof modelConfig === "string"
+      ? modelConfig
+      : typeof modelConfig === "object" && "primary" in modelConfig
+        ? modelConfig.primary
+        : undefined;
+  const filteredFallbacks =
+    typeof modelConfig === "object" && "fallbacks" in modelConfig
+      ? Array.isArray(modelConfig.fallbacks)
+        ? modelConfig.fallbacks.filter((modelRef) => isAvailableModelRef(cfg, modelRef))
+        : []
+      : undefined;
+  const parsed = primaryRaw ? parseModelRef(primaryRaw, DEFAULT_PROVIDER) : null;
+
+  if (
+    !parsed ||
+    !isManagedVllmProvider(parsed.provider) ||
+    cfg.models?.providers?.[parsed.provider]
+  ) {
+    if (filteredFallbacks === undefined || typeof modelConfig !== "object") {
+      return modelConfig;
+    }
+
+    const existingFallbacks = Array.isArray(modelConfig.fallbacks) ? modelConfig.fallbacks : [];
+    if (filteredFallbacks.length === existingFallbacks.length) {
+      return modelConfig;
+    }
+
+    return {
+      ...(filteredFallbacks.length > 0 ? { fallbacks: filteredFallbacks } : {}),
+      primary: modelConfig.primary ?? primaryRaw ?? "",
+    };
+  }
+
+  if (filteredFallbacks !== undefined) {
+    const [nextPrimary, ...remainingFallbacks] = filteredFallbacks;
+    if (nextPrimary) {
+      return {
+        ...(remainingFallbacks.length > 0 ? { fallbacks: remainingFallbacks } : {}),
+        primary: nextPrimary,
+      };
+    }
+  }
+
+  return undefined;
+}
+
 export function clearStaleVllmDefaultModel(cfg: OpenClawConfig): OpenClawConfig {
   const defaultModel = cfg.agents?.defaults?.model;
   if (!defaultModel) {
     return cfg;
   }
 
-  const primaryRaw =
-    typeof defaultModel === "string"
-      ? defaultModel
-      : typeof defaultModel === "object" && "primary" in defaultModel
-        ? defaultModel.primary
-        : undefined;
-  const filteredFallbacks =
-    typeof defaultModel === "object" && "fallbacks" in defaultModel
-      ? Array.isArray(defaultModel.fallbacks)
-        ? defaultModel.fallbacks.filter((modelRef) => isAvailableModelRef(cfg, modelRef))
-        : []
-      : undefined;
-  const parsed = primaryRaw ? parseModelRef(primaryRaw, DEFAULT_PROVIDER) : null;
-  if (
-    !parsed ||
-    !isManagedVllmProvider(parsed.provider) ||
-    cfg.models?.providers?.[parsed.provider]
-  ) {
-    if (filteredFallbacks === undefined) {
-      return cfg;
-    }
-
-    const existingFallbacks = Array.isArray(defaultModel.fallbacks) ? defaultModel.fallbacks : [];
-    if (filteredFallbacks.length === existingFallbacks.length) {
-      return cfg;
-    }
-
-    const defaults = { ...cfg.agents?.defaults };
-    defaults.model = {
-      ...(filteredFallbacks.length > 0 ? { fallbacks: filteredFallbacks } : {}),
-      primary:
-        typeof defaultModel === "object" && "primary" in defaultModel
-          ? defaultModel.primary
-          : (primaryRaw ?? ""),
-    };
-
-    return {
-      ...cfg,
-      agents: {
-        ...cfg.agents,
-        defaults,
-      },
-    };
+  const nextModel = clearStaleVllmModelConfig(cfg, defaultModel);
+  if (nextModel === defaultModel) {
+    return cfg;
   }
 
   const defaults = { ...cfg.agents?.defaults };
-  if (filteredFallbacks !== undefined) {
-    const [nextPrimary, ...remainingFallbacks] = filteredFallbacks;
-    if (nextPrimary) {
-      defaults.model = {
-        ...(remainingFallbacks.length > 0 ? { fallbacks: remainingFallbacks } : {}),
-        primary: nextPrimary,
-      };
-    } else {
-      delete defaults.model;
-    }
+  if (nextModel) {
+    defaults.model = nextModel;
   } else {
     delete defaults.model;
   }

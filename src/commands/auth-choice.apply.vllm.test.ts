@@ -163,4 +163,72 @@ describe("applyAuthChoiceVllm", () => {
       },
     });
   });
+
+  it("prunes stale managed fallbacks from an agent override without clearing the primary", async () => {
+    promptAndConfigureVllm.mockResolvedValue({
+      config: {
+        agents: {
+          defaults: {
+            model: { primary: "anthropic/claude-opus-4-6" },
+          },
+          list: [
+            {
+              id: "work",
+              model: {
+                primary: "openai/gpt-5.3-codex",
+                fallbacks: ["vllm/model-a", "vllm-2/model-b", "anthropic/claude-sonnet-4-5"],
+              },
+            },
+          ],
+        },
+        models: {
+          providers: {},
+        },
+      } satisfies OpenClawConfig,
+    });
+
+    const result = await applyAuthChoiceVllm({
+      authChoice: "vllm",
+      config: {
+        agents: {
+          list: [
+            {
+              id: "work",
+              model: {
+                primary: "openai/gpt-5.3-codex",
+                fallbacks: ["vllm/model-a", "vllm-2/model-b", "anthropic/claude-sonnet-4-5"],
+              },
+            },
+          ],
+        },
+        models: { providers: { vllm: { baseUrl: "http://gpu-box:8000/v1", models: [] } } },
+      } as OpenClawConfig,
+      prompter: makePrompter(),
+      runtime: { log: vi.fn(), error: vi.fn(), exit: vi.fn() } as never,
+      agentId: "work",
+      setDefaultModel: false,
+    });
+
+    expect(result).toEqual({
+      config: {
+        agents: {
+          defaults: {
+            model: { primary: "anthropic/claude-opus-4-6" },
+          },
+          list: [
+            {
+              id: "work",
+              model: {
+                primary: "openai/gpt-5.3-codex",
+                fallbacks: ["anthropic/claude-sonnet-4-5"],
+              },
+            },
+          ],
+        },
+        models: {
+          providers: {},
+        },
+      },
+    });
+  });
 });
