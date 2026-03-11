@@ -1,6 +1,31 @@
+import { normalizeAgentId } from "../routing/session-key.js";
 import type { ApplyAuthChoiceParams, ApplyAuthChoiceResult } from "./auth-choice.apply.js";
-import { applyVllmDefaultModel, clearStaleVllmDefaultModel } from "./vllm-default-model.js";
+import {
+  applyVllmDefaultModel,
+  clearStaleVllmDefaultModel,
+  isStaleManagedVllmModelRef,
+} from "./vllm-default-model.js";
 import { promptAndConfigureVllm } from "./vllm-setup.js";
+
+function resolveCurrentAgentModelRef(params: ApplyAuthChoiceParams): string | undefined {
+  const agentId = params.agentId ? normalizeAgentId(params.agentId) : undefined;
+  if (!agentId) {
+    return undefined;
+  }
+
+  const entry = params.config.agents?.list?.find(
+    (candidate) => normalizeAgentId(candidate.id) === agentId,
+  );
+  if (!entry?.model) {
+    return undefined;
+  }
+
+  if (typeof entry.model === "string") {
+    return entry.model.trim() || undefined;
+  }
+
+  return entry.model.primary?.trim() || undefined;
+}
 
 export async function applyAuthChoiceVllm(
   params: ApplyAuthChoiceParams,
@@ -16,7 +41,10 @@ export async function applyAuthChoiceVllm(
   });
 
   if (!vllmSelection.modelRef) {
-    const shouldClearAgentModelOverride = vllmSelection.config !== params.config;
+    const shouldClearAgentModelOverride = isStaleManagedVllmModelRef(
+      vllmSelection.config,
+      resolveCurrentAgentModelRef(params),
+    );
     return {
       config: clearStaleVllmDefaultModel(vllmSelection.config),
       ...(shouldClearAgentModelOverride ? { clearAgentModelOverride: true } : {}),

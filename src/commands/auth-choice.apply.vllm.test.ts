@@ -36,7 +36,6 @@ describe("applyAuthChoiceVllm", () => {
     });
 
     expect(result).toEqual({
-      clearAgentModelOverride: true,
       config: {
         agents: {
           defaults: {
@@ -97,15 +96,61 @@ describe("applyAuthChoiceVllm", () => {
     const result = await applyAuthChoiceVllm({
       authChoice: "vllm",
       config: {
+        agents: {
+          list: [{ id: "work", model: "vllm/model-a" }],
+        },
         models: { providers: { vllm: { baseUrl: "http://gpu-box:8000/v1", models: [] } } },
       } as OpenClawConfig,
       prompter: makePrompter(),
       runtime: { log: vi.fn(), error: vi.fn(), exit: vi.fn() } as never,
+      agentId: "work",
       setDefaultModel: false,
     });
 
     expect(result).toEqual({
       clearAgentModelOverride: true,
+      config: {
+        agents: {
+          defaults: {
+            model: { primary: "anthropic/claude-opus-4-6" },
+          },
+        },
+        models: {
+          providers: {},
+        },
+      },
+    });
+  });
+
+  it("preserves a non-vLLM override on config-only vLLM exit", async () => {
+    promptAndConfigureVllm.mockResolvedValue({
+      config: {
+        agents: {
+          defaults: {
+            model: { primary: "anthropic/claude-opus-4-6" },
+          },
+        },
+        models: {
+          providers: {},
+        },
+      } satisfies OpenClawConfig,
+    });
+
+    const result = await applyAuthChoiceVllm({
+      authChoice: "vllm",
+      config: {
+        agents: {
+          list: [{ id: "work", model: "openai/gpt-5.3-codex" }],
+        },
+        models: { providers: { vllm: { baseUrl: "http://gpu-box:8000/v1", models: [] } } },
+      } as OpenClawConfig,
+      prompter: makePrompter(),
+      runtime: { log: vi.fn(), error: vi.fn(), exit: vi.fn() } as never,
+      agentId: "work",
+      setDefaultModel: false,
+    });
+
+    expect(result).toEqual({
       config: {
         agents: {
           defaults: {

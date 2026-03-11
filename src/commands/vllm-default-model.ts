@@ -24,8 +24,21 @@ export function applyVllmDefaultModel(cfg: OpenClawConfig, modelRef: string): Op
   };
 }
 
-function isManagedVllmProvider(provider: string): boolean {
+export function isManagedVllmProvider(provider: string): boolean {
   return provider === "vllm" || provider.startsWith("vllm-");
+}
+
+export function isStaleManagedVllmModelRef(
+  cfg: OpenClawConfig,
+  modelRef: string | undefined,
+): boolean {
+  if (!modelRef) {
+    return false;
+  }
+  const parsed = parseModelRef(modelRef, DEFAULT_PROVIDER);
+  return Boolean(
+    parsed && isManagedVllmProvider(parsed.provider) && !cfg.models?.providers?.[parsed.provider],
+  );
 }
 
 function isAvailableModelRef(cfg: OpenClawConfig, modelRef: string): boolean {
