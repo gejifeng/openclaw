@@ -36,9 +36,9 @@ describe("clearStaleVllmDefaultModel", () => {
       models: {
         providers: {
           "vllm-2": {
-            apiBaseUrl: "http://localhost:8001/v1",
+            baseUrl: "http://localhost:8001/v1",
             apiKey: "unused",
-            label: "Endpoint 2",
+            models: [],
           },
         },
       },

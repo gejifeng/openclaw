@@ -30,6 +30,9 @@ function isManagedVllmProvider(provider: string): boolean {
 
 function isAvailableModelRef(cfg: OpenClawConfig, modelRef: string): boolean {
   const parsed = parseModelRef(modelRef, DEFAULT_PROVIDER);
+  if (!parsed) {
+    return false;
+  }
   return (
     !isManagedVllmProvider(parsed.provider) || Boolean(cfg.models?.providers?.[parsed.provider])
   );
