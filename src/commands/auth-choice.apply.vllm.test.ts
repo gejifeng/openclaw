@@ -53,6 +53,34 @@ describe("applyAuthChoiceVllm", () => {
   });
 
   it("clears runtime override when setup exits without a selected model", async () => {
+    const unchangedConfig = {
+      agents: {
+        defaults: {
+          model: { primary: "anthropic/claude-opus-4-6" },
+        },
+      },
+      models: {
+        providers: {},
+      },
+    } satisfies OpenClawConfig;
+    promptAndConfigureVllm.mockResolvedValue({
+      config: unchangedConfig,
+    });
+
+    const result = await applyAuthChoiceVllm({
+      authChoice: "vllm",
+      config: unchangedConfig,
+      prompter: makePrompter(),
+      runtime: { log: vi.fn(), error: vi.fn(), exit: vi.fn() } as never,
+      setDefaultModel: false,
+    });
+
+    expect(result).toEqual({
+      config: unchangedConfig,
+    });
+  });
+
+  it("clears runtime override when config-only exit removed a stale vLLM provider", async () => {
     promptAndConfigureVllm.mockResolvedValue({
       config: {
         agents: {
@@ -68,7 +96,9 @@ describe("applyAuthChoiceVllm", () => {
 
     const result = await applyAuthChoiceVllm({
       authChoice: "vllm",
-      config: {} as OpenClawConfig,
+      config: {
+        models: { providers: { vllm: { baseUrl: "http://gpu-box:8000/v1", models: [] } } },
+      } as OpenClawConfig,
       prompter: makePrompter(),
       runtime: { log: vi.fn(), error: vi.fn(), exit: vi.fn() } as never,
       setDefaultModel: false,

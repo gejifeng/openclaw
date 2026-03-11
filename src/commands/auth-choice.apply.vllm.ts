@@ -16,9 +16,10 @@ export async function applyAuthChoiceVllm(
   });
 
   if (!vllmSelection.modelRef) {
+    const shouldClearAgentModelOverride = vllmSelection.config !== params.config;
     return {
       config: clearStaleVllmDefaultModel(vllmSelection.config),
-      clearAgentModelOverride: true,
+      ...(shouldClearAgentModelOverride ? { clearAgentModelOverride: true } : {}),
     };
   }
 
