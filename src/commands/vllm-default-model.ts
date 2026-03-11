@@ -1,13 +1,19 @@
 import { DEFAULT_PROVIDER } from "../agents/defaults.js";
-import { parseModelRef } from "../agents/model-selection.js";
+import { findNormalizedProviderKey, parseModelRef } from "../agents/model-selection.js";
 import type { OpenClawConfig } from "../config/config.js";
 import type { AgentModelConfig } from "../config/types.agents-shared.js";
+
+function hasConfiguredProvider(cfg: OpenClawConfig, provider: string): boolean {
+  return Boolean(findNormalizedProviderKey(cfg.models?.providers, provider));
+}
 
 export function applyVllmDefaultModel(cfg: OpenClawConfig, modelRef: string): OpenClawConfig {
   const existingModel = cfg.agents?.defaults?.model;
   const fallbacks =
     existingModel && typeof existingModel === "object" && "fallbacks" in existingModel
-      ? (existingModel as { fallbacks?: string[] }).fallbacks
+      ? (existingModel as { fallbacks?: string[] }).fallbacks?.filter((fallback) =>
+          isAvailableModelRef(cfg, fallback),
+        )
       : undefined;
 
   return {
@@ -38,7 +44,9 @@ export function isStaleManagedVllmModelRef(
   }
   const parsed = parseModelRef(modelRef, DEFAULT_PROVIDER);
   return Boolean(
-    parsed && isManagedVllmProvider(parsed.provider) && !cfg.models?.providers?.[parsed.provider],
+    parsed &&
+    isManagedVllmProvider(parsed.provider) &&
+    !hasConfiguredProvider(cfg, parsed.provider),
   );
 }
 
@@ -47,9 +55,7 @@ function isAvailableModelRef(cfg: OpenClawConfig, modelRef: string): boolean {
   if (!parsed) {
     return false;
   }
-  return (
-    !isManagedVllmProvider(parsed.provider) || Boolean(cfg.models?.providers?.[parsed.provider])
-  );
+  return !isManagedVllmProvider(parsed.provider) || hasConfiguredProvider(cfg, parsed.provider);
 }
 
 export function clearStaleVllmModelConfig(
@@ -77,7 +83,7 @@ export function clearStaleVllmModelConfig(
   if (
     !parsed ||
     !isManagedVllmProvider(parsed.provider) ||
-    cfg.models?.providers?.[parsed.provider]
+    hasConfiguredProvider(cfg, parsed.provider)
   ) {
     if (filteredFallbacks === undefined || typeof modelConfig !== "object") {
       return modelConfig;
