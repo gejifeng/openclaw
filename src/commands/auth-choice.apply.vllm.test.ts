@@ -297,4 +297,77 @@ describe("applyAuthChoiceVllm", () => {
       },
     });
   });
+
+  it("prunes stale managed vLLM overrides for all agents when no agent id is provided", async () => {
+    promptAndConfigureVllm.mockResolvedValue({
+      config: {
+        agents: {
+          defaults: {
+            model: { primary: "anthropic/claude-opus-4-6" },
+          },
+          list: [
+            { id: "kept", model: "openai/gpt-5.3-codex" },
+            { id: "removed", model: "vllm/model-a" },
+            {
+              id: "pruned",
+              model: {
+                primary: "anthropic/claude-sonnet-4-5",
+                fallbacks: ["vllm/model-a", "openai/gpt-5.3-codex"],
+              },
+            },
+          ],
+        },
+        models: {
+          providers: {},
+        },
+      } satisfies OpenClawConfig,
+    });
+
+    const result = await applyAuthChoiceVllm({
+      authChoice: "vllm",
+      config: {
+        agents: {
+          list: [
+            { id: "kept", model: "openai/gpt-5.3-codex" },
+            { id: "removed", model: "vllm/model-a" },
+            {
+              id: "pruned",
+              model: {
+                primary: "anthropic/claude-sonnet-4-5",
+                fallbacks: ["vllm/model-a", "openai/gpt-5.3-codex"],
+              },
+            },
+          ],
+        },
+        models: { providers: { vllm: { baseUrl: "http://gpu-box:8000/v1", models: [] } } },
+      } as OpenClawConfig,
+      prompter: makePrompter(),
+      runtime: { log: vi.fn(), error: vi.fn(), exit: vi.fn() } as never,
+      setDefaultModel: false,
+    });
+
+    expect(result).toEqual({
+      config: {
+        agents: {
+          defaults: {
+            model: { primary: "anthropic/claude-opus-4-6" },
+          },
+          list: [
+            { id: "kept", model: "openai/gpt-5.3-codex" },
+            { id: "removed" },
+            {
+              id: "pruned",
+              model: {
+                primary: "anthropic/claude-sonnet-4-5",
+                fallbacks: ["openai/gpt-5.3-codex"],
+              },
+            },
+          ],
+        },
+        models: {
+          providers: {},
+        },
+      },
+    });
+  });
 });

@@ -75,6 +75,42 @@ function pruneCurrentAgentModelOverride(params: {
   };
 }
 
+function pruneAllAgentModelOverrides(config: OpenClawConfig): OpenClawConfig {
+  const list = config.agents?.list;
+  if (!list || list.length === 0) {
+    return config;
+  }
+
+  let changed = false;
+  const nextList = list.map((entry) => {
+    const nextModel = clearStaleVllmModelConfig(config, entry.model);
+    if (nextModel === entry.model) {
+      return entry;
+    }
+    changed = true;
+    if (!nextModel) {
+      const { model: _model, ...restEntry } = entry;
+      return restEntry;
+    }
+    return {
+      ...entry,
+      model: nextModel,
+    };
+  });
+
+  if (!changed) {
+    return config;
+  }
+
+  return {
+    ...config,
+    agents: {
+      ...config.agents,
+      list: nextList,
+    },
+  };
+}
+
 export async function applyAuthChoiceVllm(
   params: ApplyAuthChoiceParams,
 ): Promise<ApplyAuthChoiceResult | null> {
@@ -89,10 +125,12 @@ export async function applyAuthChoiceVllm(
   });
 
   if (!vllmSelection.modelRef) {
-    const nextConfig = pruneCurrentAgentModelOverride({
-      config: clearStaleVllmDefaultModel(vllmSelection.config),
-      agentId: params.agentId,
-    });
+    const nextConfig = params.agentId
+      ? pruneCurrentAgentModelOverride({
+          config: clearStaleVllmDefaultModel(vllmSelection.config),
+          agentId: params.agentId,
+        })
+      : pruneAllAgentModelOverrides(clearStaleVllmDefaultModel(vllmSelection.config));
     const shouldClearAgentModelOverride = isStaleManagedVllmModelRef(
       nextConfig,
       resolveAgentModelRef(nextConfig, params.agentId),
